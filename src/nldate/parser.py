@@ -162,6 +162,63 @@ def parse(s: str, today: date | None = None) -> date:
             return today - timedelta(days=delta_days)
 
     # -----------------------
+    # compound relative to another date
+    # -----------------------
+    m = re.fullmatch(
+        r"(.+?)\s+(before|after)\s+(.+)",
+        s,
+    )
+
+    if m:
+        offset_text = m.group(1)
+        direction = m.group(2)
+        base_text = m.group(3)
+
+        base_date = parse(base_text, today)
+
+        sign = 1 if direction == "after" else -1
+
+        years = 0
+        months = 0
+        weeks = 0
+        days = 0
+
+        matches = re.findall(
+            r"(\w+)\s+"
+            r"(year|years|month|months|week|weeks|day|days)",
+            offset_text,
+        )
+
+        if matches:
+            for number_text, unit in matches:
+                n = parse_number(number_text)
+
+                if unit in {"year", "years"}:
+                    years += n
+
+                elif unit in {"month", "months"}:
+                    months += n
+
+                elif unit in {"week", "weeks"}:
+                    weeks += n
+
+                elif unit in {"day", "days"}:
+                    days += n
+
+            result = base_date
+
+            if years:
+                result = add_months(result, sign * years * 12)
+
+            if months:
+                result = add_months(result, sign * months)
+
+            if weeks or days:
+                result = result + timedelta(days=sign * (weeks * 7 + days))
+
+            return result
+
+    # -----------------------
     # relative to another date
     # -----------------------
     m = re.fullmatch(
