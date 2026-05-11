@@ -42,3 +42,35 @@ def test_absolute_date():
 
 def test_next_tuesday():
     assert parse("next Tuesday", date(2025, 1, 1)) == date(2025, 1, 7)
+
+
+def test_slash_date():
+    assert parse("2025/12/04") == date(2025, 12, 4)
+
+
+def test_short_month():
+    assert parse("Dec 1, 2025") == date(2025, 12, 1)
+
+
+def test_short_month_period():
+    assert parse("Dec. 1, 2025") == date(2025, 12, 1)
+
+
+def test_in_days():
+    assert parse("in 5 days", date(2025, 1, 1)) == date(2025, 1, 6)
+
+
+def test_days_ago():
+    assert parse("5 days ago", date(2025, 1, 10)) == date(2025, 1, 5)
+
+
+def test_a_week_ago():
+    assert parse("a week ago", date(2025, 1, 10)) == date(2025, 1, 3)
+
+
+def test_next_friday():
+    assert parse("next friday", date(2025, 1, 1)) == date(2025, 1, 3)
+
+
+def test_single_digit_date():
+    assert parse("2025/12/3") == date(2025, 12, 3)

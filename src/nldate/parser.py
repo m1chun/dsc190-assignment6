@@ -7,12 +7,40 @@ import re
 
 WEEKDAYS = {
     "monday": 0,
+    "mon": 0,
     "tuesday": 1,
+    "tue": 1,
+    "tues": 1,
     "wednesday": 2,
+    "wed": 2,
     "thursday": 3,
+    "thu": 3,
+    "thur": 3,
+    "thurs": 3,
     "friday": 4,
+    "fri": 4,
     "saturday": 5,
+    "sat": 5,
     "sunday": 6,
+    "sun": 6,
+}
+
+
+NUMBER_WORDS = {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
 }
 
 
@@ -33,13 +61,26 @@ def clean(text: str) -> str:
     # remove ordinal suffixes
     text = re.sub(r"(\d)(st|nd|rd|th)", r"\1", text)
 
-    # remove periods in month abbreviations
+    # remove periods
     text = text.replace(".", "")
+
+    # normalize commas spacing
+    text = re.sub(r"\s*,\s*", ", ", text)
 
     # normalize whitespace
     text = re.sub(r"\s+", " ", text)
 
-    return text
+    return text.strip()
+
+
+def parse_number(word: str) -> int:
+    if word.isdigit():
+        return int(word)
+
+    if word in NUMBER_WORDS:
+        return NUMBER_WORDS[word]
+
+    raise ValueError(f"Invalid number: {word}")
 
 
 def parse(s: str, today: date | None = None) -> date:
@@ -49,7 +90,7 @@ def parse(s: str, today: date | None = None) -> date:
     s = clean(s)
 
     # -----------------------
-    # keywords
+    # simple keywords
     # -----------------------
     if s == "today":
         return today
@@ -61,7 +102,7 @@ def parse(s: str, today: date | None = None) -> date:
         return today - timedelta(days=1)
 
     # -----------------------
-    # ISO-like formats
+    # ISO-like dates
     # -----------------------
     if re.fullmatch(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", s):
         sep = "-" if "-" in s else "/"
@@ -69,7 +110,7 @@ def parse(s: str, today: date | None = None) -> date:
         return date(year, month, day)
 
     # -----------------------
-    # absolute text dates
+    # text month formats
     # -----------------------
     date_formats = [
         "%b %d, %Y",
@@ -103,74 +144,88 @@ def parse(s: str, today: date | None = None) -> date:
             return today + timedelta(days=delta_days)
 
     # -----------------------
-    # relative expressions
-    # examples:
-    # 5 days after today
-    # 2 weeks before today
-    # in 5 days
-    # 3 months ago
+    # last weekday
     # -----------------------
-
-    # in 5 days
-    m = re.fullmatch(
-        r"in (\d+) (day|days|week|weeks|month|months|year|years)",
-        s,
-    )
+    m = re.fullmatch(r"last (\w+)", s)
 
     if m:
-        amount = int(m.group(1))
-        unit = m.group(2)
+        weekday_name = m.group(1)
 
-        direction = 1
+        if weekday_name in WEEKDAYS:
+            target = WEEKDAYS[weekday_name]
 
-    else:
-        # 5 days after today
-        m = re.fullmatch(
-            r"(\d+) (day|days|week|weeks|month|months|year|years) "
-            r"(after|before) today",
-            s,
-        )
+            delta_days = (today.weekday() - target) % 7
 
-        if m:
-            amount = int(m.group(1))
-            unit = m.group(2)
-            direction = 1 if m.group(3) == "after" else -1
+            if delta_days == 0:
+                delta_days = 7
 
-        else:
-            # 5 days ago
-            m = re.fullmatch(
-                r"(\d+) (day|days|week|weeks|month|months|year|years) ago",
-                s,
-            )
+            return today - timedelta(days=delta_days)
 
-            if m:
-                amount = int(m.group(1))
-                unit = m.group(2)
-                direction = -1
-            else:
-                raise ValueError(f"Cannot parse: {s}")
+    # -----------------------
+    # relative expressions
+    # -----------------------
+    UNIT_MAP = {
+        "day": ("days", 1),
+        "days": ("days", 1),
+        "week": ("days", 7),
+        "weeks": ("days", 7),
+        "month": ("months", 1),
+        "months": ("months", 1),
+        "year": ("years", 1),
+        "years": ("years", 1),
+    }
 
-    amount *= direction
+    parts = s.split()
 
-    # apply unit
-    if unit in {"day", "days"}:
-        return today + timedelta(days=amount)
+    def apply_delta(n: int, unit: str, sign: int) -> date:
+        category, multiplier = UNIT_MAP[unit]
+        amount = n * multiplier * sign
 
-    if unit in {"week", "weeks"}:
-        return today + timedelta(weeks=amount)
+        if category == "days":
+            return today + timedelta(days=amount)
 
-    if unit in {"month", "months"}:
-        return add_months(today, amount)
+        if category == "months":
+            return add_months(today, amount)
 
-    if unit in {"year", "years"}:
+        if category == "years":
+            return add_months(today, amount * 12)
+
+        raise ValueError
+
+    # "in 5 days"
+    if len(parts) == 3 and parts[0] == "in":
+        n = parse_number(parts[1])
+        unit = parts[2]
+
+        if unit in UNIT_MAP:
+            return apply_delta(n, unit, 1)
+
+    # "5 days ago"
+    if len(parts) == 3 and parts[2] == "ago":
+        n = parse_number(parts[0])
+        unit = parts[1]
+
+        if unit in UNIT_MAP:
+            return apply_delta(n, unit, -1)
+
+    # "5 days after"
+    # "5 days before"
+    if len(parts) >= 3:
         try:
-            return today.replace(year=today.year + amount)
-        except ValueError:
-            # Feb 29 handling
-            return today.replace(
-                year=today.year + amount,
-                month=2,
-                day=28,
-            )
+            n = parse_number(parts[0])
+            unit = parts[1]
+            direction = parts[2]
 
+            if unit in UNIT_MAP:
+                if direction in {"after", "from"}:
+                    return apply_delta(n, unit, 1)
+
+                if direction in {"before"}:
+                    return apply_delta(n, unit, -1)
+        except ValueError:
+            pass
+
+    # -----------------------
+    # fallback failure
+    # -----------------------
     raise ValueError(f"Cannot parse: {s}")
