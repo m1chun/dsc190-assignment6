@@ -34,7 +34,7 @@ def parse(s: str, today: date | None = None) -> date:
     # -----------------------
     # ISO formats: 2025-12-04 or 2025/12/04
     # -----------------------
-    m = re.fullmatch(r"\d{4}[-/]\d{2}[-/]\d{2}", s)
+    m = re.fullmatch(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", s)
     if m:
         sep = "-" if "-" in s else "/"
         y, mth, d = map(int, s.split(sep))
