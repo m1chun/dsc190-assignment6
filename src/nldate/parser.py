@@ -23,12 +23,25 @@ def parse(s: str, today: date | None = None) -> date:
     parts = s.split()
 
     # -----------------------
-    # ISO format: 2025-12-04
+    # ISO variants: 2025/12/04
     # -----------------------
     try:
-        return date.fromisoformat(s)
+        if "/" in s:
+            parts = s.split("/")
+            if len(parts) == 3:
+                y, m, d = map(int, parts)
+                return date(y, m, d)
     except ValueError:
         pass
+
+    # -----------------------
+    # YYYY/MM/DD format
+    # -----------------------
+    if "/" in s:
+        parts = s.split("/")
+        if len(parts) == 3:
+            y, m, d = map(int, parts)
+            return date(int(y), int(m), int(d))
 
     # -----------------------
     # keywords
