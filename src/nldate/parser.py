@@ -1,5 +1,8 @@
-from datetime import date, timedelta, datetime
+from __future__ import annotations
+
+from datetime import date, timedelta
 import re
+
 
 WEEKDAYS = {
     "monday": 0,
@@ -20,7 +23,15 @@ def parse(s: str, today: date | None = None) -> date:
     parts = s.split()
 
     # -----------------------
-    # simple keywords
+    # ISO format: 2025-12-04
+    # -----------------------
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        pass
+
+    # -----------------------
+    # keywords
     # -----------------------
     if s == "today":
         return today
@@ -60,26 +71,18 @@ def parse(s: str, today: date | None = None) -> date:
             return today.replace(year=today.year - n)
 
     # -----------------------
-    # months (simple approximation)
+    # months (approx)
     # -----------------------
-    if "months" in s:
+    if "month" in s:
         n = int(parts[0])
-        total_months = today.month + (n if "after" in s else -n)
-        year = today.year + (total_months - 1) // 12
-        month = (total_months - 1) % 12 + 1
+        delta = n if "after" in s else -n
+
+        month = today.month + delta
+        year = today.year + (month - 1) // 12
+        month = (month - 1) % 12 + 1
+
         day = min(today.day, 28)
         return date(year, month, day)
-
-    # -----------------------
-    # absolute date: "December 1st, 2025"
-    # -----------------------
-    def clean(text: str) -> str:
-        return re.sub(r"(st|nd|rd|th)", "", text)
-
-    try:
-        return datetime.strptime(clean(s), "%B %d, %Y").date()
-    except ValueError:
-        pass
 
     # -----------------------
     # next weekday
@@ -94,4 +97,25 @@ def parse(s: str, today: date | None = None) -> date:
 
         return today + timedelta(days=delta)
 
+    # -----------------------
+    # absolute format: "December 1st, 2025"
+    # -----------------------
+    def clean(text: str) -> str:
+        return re.sub(r"(st|nd|rd|th)", "", text)
+
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        pass
+
+    try:
+        from datetime import datetime
+
+        return datetime.strptime(clean(s), "%B %d, %Y").date()
+    except ValueError:
+        pass
+
+    # -----------------------
+    # failure case
+    # -----------------------
     raise ValueError(f"Cannot parse: {s}")
