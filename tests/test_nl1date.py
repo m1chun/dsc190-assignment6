@@ -1,5 +1,5 @@
 from datetime import date
-from src.dsc190_assignment6.nldate import parse
+from dsc190_assignment6.nldate import parse
 
 TODAY = date(2025, 1, 1)
 
