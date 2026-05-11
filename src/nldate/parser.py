@@ -64,7 +64,7 @@ def clean(text: str) -> str:
     # remove periods
     text = text.replace(".", "")
 
-    # normalize commas spacing
+    # normalize commas
     text = re.sub(r"\s*,\s*", ", ", text)
 
     # normalize whitespace
@@ -81,6 +81,24 @@ def parse_number(word: str) -> int:
         return NUMBER_WORDS[word]
 
     raise ValueError(f"Invalid number: {word}")
+
+
+def apply_delta(base: date, n: int, unit: str, sign: int) -> date:
+    amount = n * sign
+
+    if unit in {"day", "days"}:
+        return base + timedelta(days=amount)
+
+    if unit in {"week", "weeks"}:
+        return base + timedelta(weeks=amount)
+
+    if unit in {"month", "months"}:
+        return add_months(base, amount)
+
+    if unit in {"year", "years"}:
+        return add_months(base, amount * 12)
+
+    raise ValueError(f"Invalid unit: {unit}")
 
 
 def parse(s: str, today: date | None = None) -> date:
@@ -162,70 +180,63 @@ def parse(s: str, today: date | None = None) -> date:
             return today - timedelta(days=delta_days)
 
     # -----------------------
-    # relative expressions
+    # relative to another date
     # -----------------------
-    UNIT_MAP = {
-        "day": ("days", 1),
-        "days": ("days", 1),
-        "week": ("days", 7),
-        "weeks": ("days", 7),
-        "month": ("months", 1),
-        "months": ("months", 1),
-        "year": ("years", 1),
-        "years": ("years", 1),
-    }
+    m = re.fullmatch(
+        r"(.+?)\s+"
+        r"(day|days|week|weeks|month|months|year|years)\s+"
+        r"(before|after)\s+(.+)",
+        s,
+    )
 
+    if m:
+        number_text = m.group(1)
+        unit = m.group(2)
+        direction = m.group(3)
+        base_text = m.group(4)
+
+        n = parse_number(number_text)
+
+        base_date = parse(base_text, today)
+
+        sign = 1 if direction == "after" else -1
+
+        return apply_delta(base_date, n, unit, sign)
+
+    # -----------------------
+    # split expression parsing
+    # -----------------------
     parts = s.split()
-
-    def apply_delta(n: int, unit: str, sign: int) -> date:
-        category, multiplier = UNIT_MAP[unit]
-        amount = n * multiplier * sign
-
-        if category == "days":
-            return today + timedelta(days=amount)
-
-        if category == "months":
-            return add_months(today, amount)
-
-        if category == "years":
-            return add_months(today, amount * 12)
-
-        raise ValueError
 
     # "in 5 days"
     if len(parts) == 3 and parts[0] == "in":
         n = parse_number(parts[1])
         unit = parts[2]
 
-        if unit in UNIT_MAP:
-            return apply_delta(n, unit, 1)
+        return apply_delta(today, n, unit, 1)
 
     # "5 days ago"
     if len(parts) == 3 and parts[2] == "ago":
         n = parse_number(parts[0])
         unit = parts[1]
 
-        if unit in UNIT_MAP:
-            return apply_delta(n, unit, -1)
+        return apply_delta(today, n, unit, -1)
 
     # "5 days after"
     # "5 days before"
-    if len(parts) >= 3:
+    if len(parts) == 3:
         try:
             n = parse_number(parts[0])
             unit = parts[1]
             direction = parts[2]
 
-            if unit in UNIT_MAP:
-                if direction in {"after", "from"}:
-                    return apply_delta(n, unit, 1)
+            if direction == "after":
+                return apply_delta(today, n, unit, 1)
 
-                if direction in {"before"}:
-                    return apply_delta(n, unit, -1)
+            if direction == "before":
+                return apply_delta(today, n, unit, -1)
+
         except ValueError:
             pass
 
-    # -----------------------
-    # fallback failure
-    # -----------------------
     raise ValueError(f"Cannot parse: {s}")
