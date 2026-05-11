@@ -101,6 +101,33 @@ def parse(s: str, today: date | None = None) -> date:
     if s == "yesterday":
         return today - timedelta(days=1)
 
+    if s == "the day after tomorrow":
+        return today + timedelta(days=2)
+
+    if s == "the day before yesterday":
+        return today - timedelta(days=2)
+
+    if s == "next week":
+        return today + timedelta(weeks=1)
+
+    if s == "last week":
+        return today - timedelta(weeks=1)
+
+    if s == "next month":
+        return add_months(today, 1)
+
+    if s == "last month":
+        return add_months(today, -1)
+
+    if s == "next year":
+        return add_months(today, 12)
+
+    if s == "last year":
+        return add_months(today, -12)
+
+    if s == "now":
+        return today
+
     # -----------------------
     # ISO-like dates
     # -----------------------
