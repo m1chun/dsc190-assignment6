@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import re
 
 
@@ -20,28 +20,6 @@ def parse(s: str, today: date | None = None) -> date:
         today = date.today()
 
     s = s.lower().strip()
-    parts = s.split()
-
-    # -----------------------
-    # ISO variants: 2025/12/04
-    # -----------------------
-    try:
-        if "/" in s:
-            parts = s.split("/")
-            if len(parts) == 3:
-                y, m, d = map(int, parts)
-                return date(y, m, d)
-    except ValueError:
-        pass
-
-    # -----------------------
-    # YYYY/MM/DD format
-    # -----------------------
-    if "/" in s:
-        parts = s.split("/")
-        if len(parts) == 3:
-            y, m, d = map(int, parts)
-            return date(int(y), int(m), int(d))
 
     # -----------------------
     # keywords
@@ -54,81 +32,77 @@ def parse(s: str, today: date | None = None) -> date:
         return today - timedelta(days=1)
 
     # -----------------------
-    # relative days
+    # ISO formats: 2025-12-04 or 2025/12/04
     # -----------------------
-    if "days" in s:
-        n = int(parts[0])
-        if "after" in s:
-            return today + timedelta(days=n)
-        if "before" in s:
-            return today - timedelta(days=n)
+    m = re.fullmatch(r"\d{4}[-/]\d{2}[-/]\d{2}", s)
+    if m:
+        sep = "-" if "-" in s else "/"
+        y, mth, d = map(int, s.split(sep))
+        return date(y, mth, d)
 
     # -----------------------
-    # relative weeks
+    # relative days/weeks
     # -----------------------
-    if "weeks" in s:
+    parts = s.split()
+
+    if len(parts) >= 4 and parts[1] in {"day", "days", "week", "weeks"}:
         n = int(parts[0])
-        if "after" in s:
-            return today + timedelta(weeks=n)
-        if "before" in s:
-            return today - timedelta(weeks=n)
+        direction = parts[2]
+
+        if "day" in parts[1]:
+            delta = timedelta(days=n)
+        else:
+            delta = timedelta(weeks=n)
+
+        return today + delta if direction == "after" else today - delta
 
     # -----------------------
     # years
     # -----------------------
-    if "year" in s:
+    if len(parts) >= 4 and parts[1] in {"year", "years"}:
         n = int(parts[0])
-        if "after" in s:
-            return today.replace(year=today.year + n)
-        if "before" in s:
-            return today.replace(year=today.year - n)
+        direction = parts[2]
+
+        new_year = today.year + (n if direction == "after" else -n)
+        return today.replace(year=new_year)
 
     # -----------------------
     # months (approx)
     # -----------------------
-    if "month" in s:
+    if len(parts) >= 4 and parts[1] in {"month", "months"}:
         n = int(parts[0])
-        delta = n if "after" in s else -n
+        direction = parts[2]
 
-        month = today.month + delta
+        month_delta = n if direction == "after" else -n
+
+        month = today.month + month_delta
         year = today.year + (month - 1) // 12
         month = (month - 1) % 12 + 1
 
-        day = min(today.day, 28)
-        return date(year, month, day)
+        return date(year, month, min(today.day, 28))
 
     # -----------------------
     # next weekday
     # -----------------------
     if s.startswith("next "):
         day_name = s.replace("next ", "")
-        target = WEEKDAYS[day_name]
-
-        delta = (target - today.weekday() + 7) % 7
-        if delta == 0:
-            delta = 7
-
-        return today + timedelta(days=delta)
+        if day_name in WEEKDAYS:
+            target = WEEKDAYS[day_name]
+            delta_days = (target - today.weekday() + 7) % 7
+            if delta_days == 0:
+                delta_days = 7
+            return today + timedelta(days=delta_days)
 
     # -----------------------
-    # absolute format: "December 1st, 2025"
+    # "Dec 1, 2025" / "December 1, 2025"
     # -----------------------
     def clean(text: str) -> str:
         return re.sub(r"(st|nd|rd|th)", "", text)
 
-    try:
-        return date.fromisoformat(s)
-    except ValueError:
-        pass
+    for fmt in ("%b %d, %Y", "%B %d, %Y"):
+        try:
+            return datetime.strptime(clean(s).title(), fmt).date()
+        except ValueError:
+            pass
 
-    try:
-        from datetime import datetime
-
-        return datetime.strptime(clean(s), "%B %d, %Y").date()
-    except ValueError:
-        pass
-
-    # -----------------------
-    # failure case
-    # -----------------------
     raise ValueError(f"Cannot parse: {s}")
