@@ -94,10 +94,12 @@ def parse(s: str, today: date | None = None) -> date:
             return today + timedelta(days=delta_days)
 
     # -----------------------
-    # "Dec 1, 2025" / "December 1, 2025"
+    # "Dec 1, 2025" / "Dec. 1, 2025" / "December 1, 2025"
     # -----------------------
     def clean(text: str) -> str:
-        return re.sub(r"(st|nd|rd|th)", "", text)
+        text = re.sub(r"(st|nd|rd|th)", "", text)
+        text = text.replace(".", "")  # <-- fixes "Dec."
+        return text
 
     for fmt in ("%b %d, %Y", "%B %d, %Y"):
         try:
